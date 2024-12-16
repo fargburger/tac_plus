@@ -20,7 +20,6 @@
  */
 
 /* Routines to fork children and communicate with them via pipes */
-
 #include "tac_plus.h"
 #include <sys/wait.h>
 #ifdef HAVE_CTYPE_H
@@ -30,6 +29,7 @@
 #include <signal.h>
 
 static void close_fds(int, int, int);
+static int is_valid_name(const char *name);
 static char *lookup(char *, struct author_data *);
 #if HAVE_PID_T
 static pid_t my_popen(char *, int *, int *, int *);
@@ -68,10 +68,14 @@ lookup(char *sym, struct author_data *data)
     static char buf[5];
 
     if (STREQ(sym, "user")) {
-	return(tac_strdup(data->id->username));
+        if (is_valid_name(data->id->username)) {
+           return(tac_strdup(data->id->username));
+        }
     }
     if (STREQ(sym, "name")) {
-	return(tac_strdup(data->id->NAS_name));
+        if (is_valid_name(data->id->NAS_name)) {
+           return(tac_strdup(data->id->username));
+        }
     }
     if (STREQ(sym, "ip")) {
 	return(tac_strdup(data->id->NAS_ip));
@@ -80,7 +84,9 @@ lookup(char *sym, struct author_data *data)
 	return(tac_strdup(data->id->NAS_port));
     }
     if (STREQ(sym, "address")) {
-	return(tac_strdup(data->id->NAC_address));
+        if (is_valid_name(data->id->NAC_address)) {
+           return(tac_strdup(data->id->NAC_address));
+        }
     }
     if (STREQ(sym, "priv")) {
 	snprintf(buf, sizeof(buf), "%d", data->id->priv_lvl);
@@ -113,6 +119,28 @@ lookup(char *sym, struct author_data *data)
     }
 
     return(tac_strdup("unknown"));
+}
+
+/* is valid_name performs basic input santization for fields inside author_data that
+ * should be alphanumeric (NAC-address field, username)
+*/
+static int is_valid_name(const char *name) {
+    size_t len = strlen(name);
+
+    if (len > 100) {
+        report(LOG_DEBUG, "field %s is longer than allowed length 100", name);
+        return 0;
+    }
+
+    // character set check
+    for (size_t i = 0; i < len; i++) {
+       char c = name[i];
+       if (!isalnum(c) && c != '_' && c != '.' && c != ':') {
+          report(LOG_DEBUG, "invalid character '%c' inside field [%s]", c, name);
+          return 0;
+       }
+    }
+    return 1;
 }
 
 /*
